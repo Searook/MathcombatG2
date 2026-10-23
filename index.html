@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>王牌數學空戰</title>
+<style>
+:root{--bg:#0d1b2a;--card:#1b263b;--bd:#415a77;--tx:#fff;--gold:#ffb703}
+@media (prefers-color-scheme: dark){:root{--bg:#0d1b2a}}
+*{box-sizing:border-box;user-select:none;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:10px;padding-top:calc(10px + env(safe-area-inset-top,0px));padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+h1{font-size:22px;margin:4px 0 10px;color:#e0e1dd;text-align:center}
+#card{background:var(--card);border:4px solid var(--bd);border-radius:16px;padding:8px;width:100%;max-width:640px}
+#wrap{position:relative;width:100%}
+canvas{width:100%;display:block;background:#000814;border-radius:10px}
+.modal{position:absolute;left:0;right:0;bottom:0;top:0;background:rgba(13,27,42,.94);border-radius:10px;padding:14px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;z-index:5}
+#quiz{display:none;top:auto;height:68%;background:rgba(13,27,42,.9);justify-content:flex-start;gap:6px}
+#crash{display:none;z-index:9}
+.ptitle{font-size:20px;color:var(--gold);font-weight:bold;margin-bottom:8px}
+.pg{display:flex;gap:14px;width:100%}
+.bp{flex:1;background:#219ebc;color:#fff;border:3px solid #8ecae6;border-radius:15px;padding:16px 8px;font-weight:bold;font-size:22px;box-shadow:0 5px #023047;cursor:pointer;font-family:inherit}
+.bp:active{transform:translateY(3px);box-shadow:0 2px #023047}
+.bp small{display:block;margin-top:8px;font-size:14px;color:var(--gold);background:rgba(0,0,0,.3);border-radius:10px;padding:3px 6px}
+.lock{color:#ff4d7d;font-weight:bold;font-size:14px;animation:b .8s infinite}
+@keyframes b{50%{opacity:.3}}
+#qt{font-size:19px;line-height:1.45;text-align:left;background:#0d1b2a;border-left:5px solid var(--gold);border-radius:8px;padding:10px;width:100%}
+#opts{display:flex;gap:10px;width:100%}
+.bo{flex:1;background:#415a77;color:#fff;border:2px solid #778da9;border-radius:10px;padding:12px 4px;font-size:26px;font-weight:bold;cursor:pointer;font-family:inherit}
+.bo:active{background:var(--gold);color:#000}
+.ct{font-size:32px;color:#ff4d7d;font-weight:bold}
+.br{background:var(--gold);color:#023047;border:0;border-radius:25px;padding:12px 30px;font-size:22px;font-weight:bold;box-shadow:0 4px #fb8500;margin-top:14px;cursor:pointer;font-family:inherit}
+.ni{width:100%;font-size:20px;padding:8px;border-radius:12px;border:3px solid #8ecae6;background:#0d1b2a;color:#fff;text-align:center;font-family:inherit;margin-bottom:12px;user-select:text;-webkit-user-select:text}#pilot{overflow:auto;padding:10px;justify-content:flex-start}#pilot>:first-child{margin-top:auto}#pilot>:last-child{margin-bottom:auto}#lb{width:100%;margin-top:6px;font-size:15px;text-align:left}#lb div{display:flex;justify-content:space-between;padding:3px 8px;border-bottom:1px solid #415a77}.tabs{display:flex;gap:8px;margin-top:10px}.tb{background:#415a77;color:#fff;border:0;border-radius:8px;padding:6px 12px;font-family:inherit;cursor:pointer}.tb.on{background:var(--gold);color:#000}
+</style>
+</head>
+<body>
+<h1>🛩️ 王牌數學空戰 🚀</h1>
+<div id="card"><div id="wrap">
+<canvas id="cv" width="640" height="400"></canvas>
+<div id="pilot" class="modal">
+<div class="ptitle">輸入駕駛員名字，準備起飛！</div>
+<input id="nm" class="ni" maxlength="8" placeholder="輸入名字" autocomplete="off">
+<button class="bp" style="flex:none;width:100%;padding:12px" onclick="go()">🛫 起飛</button>
+<div class="ptitle" style="font-size:16px;margin:10px 0 0">🏆 排行榜 TOP 5</div>
+<div id="lb"></div></div>
+<div id="quiz" class="modal">
+<div class="lock">⚠️ 敵機鎖定中！選出正確答案擊落它 ⚠️</div>
+<div id="qt"></div><div id="opts"></div></div>
+<div id="crash" class="modal">
+<div class="ct">💥 戰機墜毀！</div>
+<p id="cr" style="font-size:18px;margin:8px 0"></p>
+<h3 id="fs" style="color:var(--gold);margin:4px 0"></h3>
+<h4 id="hh" style="color:#8ecae6;margin:4px 0"></h4>
+<button class="br" onclick="showPilot()">🔄 換人或重新起飛</button></div>
+</div></div>
+<script>
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d'),W=640,H=400;
+const $=id=>document.getElementById(id);
+// ---- 歷史記錄 ----
+let hs=Object.create(null);
+try{const s=localStorage.getItem('ace_hs');if(s)hs=Object.assign(hs,JSON.parse(s))}catch(e){}
+function saveHS(){try{localStorage.setItem('ace_hs',JSON.stringify(hs))}catch(e){}}
+let tabI=0,online=[],dbR=null;
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function tab(i){sClick();tabI=i;$('t1').className='tb'+(i?'':' on');$('t2').className='tb'+(i?' on':'');showHS()}
+function showHS(){
+ let rows;
+ if(tabI===0)rows=Object.entries(hs);
+ else if(!dbR){$('lb').innerHTML='<div>線上排行需登入 Claude 後開啟此頁才能使用</div>';return}
+ else rows=online.slice();
+ rows=rows.sort((a,b)=>b[1]-a[1]).slice(0,5);
+ $('lb').innerHTML=rows.length?rows.map((r,i)=>`<div><span>${['🥇','🥈','🥉'][i]||(i+1)+'.'} ${esc(r[0])}</span><b>${r[1]} 架</b></div>`).join(''):'<div>還沒有紀錄，快來挑戰！</div>'}
+async function initDb(){try{const c=await claude.use('db');if(!c)return;dbR=c;c.collection('scores').orderBy('best','desc').limit(10).onSnapshot(s=>{online=s.docs.map(d=>[d.data().name,d.data().best]);if(tabI===1)showHS()},()=>{})}catch(e){}}
+function pushOnline(n,s){try{if(!dbR||s<1)return;const d=dbR.collection('scores').doc('p'+Array.from(new TextEncoder().encode(n)).map(b=>b.toString(16)).join(''));d.get().then(x=>{if(!x.exists||x.data().best<s)return d.set({name:n,best:s})}).catch(()=>{})}catch(e){}}
+// ---- 音效 ----
+let ac=null;
+function initA(){try{if(!ac){const C=window.AudioContext||window.webkitAudioContext;if(C)ac=new C()}if(ac&&ac.state==='suspended')ac.resume()}catch(e){}}
+function tone(f0,f1,d,type,v,delay){try{if(!ac)return;const t=ac.currentTime+(delay||0),o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f1,t+d);g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.01,t+d);o.connect(g);g.connect(ac.destination);o.start(t);o.stop(t+d)}catch(e){}}
+function boom(d,v){try{if(!ac)return;const n=ac.sampleRate*d,b=ac.createBuffer(1,n,ac.sampleRate),a=b.getChannelData(0);for(let i=0;i<n;i++)a[i]=(Math.random()*2-1)*(1-i/n);const s=ac.createBufferSource(),g=ac.createGain(),f=ac.createBiquadFilter();f.type='lowpass';f.frequency.value=900;s.buffer=b;g.gain.value=v;s.connect(f);f.connect(g);g.connect(ac.destination);s.start()}catch(e){}}
+const sClick=()=>tone(600,1200,.08,'sine',.2);
+const sShoot=()=>tone(900,120,.25,'sawtooth',.2);
+const sBoom=()=>boom(.5,.5);
+const sOk=()=>{tone(523,523,.12,'triangle',.25);tone(659,659,.12,'triangle',.25,.12);tone(784,784,.2,'triangle',.25,.24)};
+const sCrash=()=>{boom(1.1,.7);tone(500,60,1,'sawtooth',.25)};
+const sAlert=()=>{tone(1000,1000,.1,'square',.12);tone(1000,1000,.1,'square',.12,.18)};
+// ---- 題目 ----
+const R=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=R(0,i);[a[i],a[j]]=[a[j],a[i]]}return a}
+let lastT=-1;
+function genQ(n){
+ let t;do{t=R(0,7)}while(t===lastT);lastT=t;
+ let q,c,cand,a,b,d;
+ if(t===0){a=R(12,79);b=R(11,Math.min(60,99-a));c=a+b;
+  q=[`${n}隊長的戰機有${a}枚飛彈，基地又補給${b}枚，現在共有幾枚飛彈？`,`${n}隊長第一回合擊落${a}架敵機，第二回合又擊落${b}架，一共擊落幾架？`,`天空中有${a}架友軍戰機和${b}架敵機在纠斗，空中共有幾架戰機？`,`航空母艦上有${a}架戰機，又飛來${b}架，現在艦上有幾架？`][R(0,3)];
+  cand=[c+10,c-10,c+1,c-1,Math.abs(a-b)]}
+ else if(t===1){a=R(30,99);b=R(11,a-5);c=a-b;
+  q=[`敵方機群有${a}架戰機，被${n}隊長擊落${b}架，還剩幾架？`,`${n}隊長的戰機有${a}格油量，空戰用掉${b}格，還剩幾格？`,`${n}隊長帶著${a}發機砲子彈出擊，射出${b}發後還剩幾發？`][R(0,2)];
+  cand=[c+10,c-10,a+b,c+1,c-1]}
+ else if(t===2){a=R(40,99);b=R(11,a-8);c=a-b;
+  q=R(0,1)?`紅隊有${a}架戰機，藍隊有${b}架，紅隊比藍隊多幾架？`:`藍隊有${b}架戰機，紅隊有${a}架，藍隊比紅隊少幾架？`;
+  cand=[c+10,c-10,a+b,c+1,c-1]}
+ else if(t===3){a=R(11,60);c=R(11,Math.min(60,99-a));
+  q=`${n}隊長要擊落${a+c}架敵機才能破紀錄，目前已經擊落${a}架，還要再擊落幾架？`;
+  cand=[c+10,c-10,a+c,c+1,c-1]}
+ else if(t===4){a=R(12,60);b=R(11,39);c=a+b;
+  q=`機場有一些戰機，起飛${b}架後，還剩${a}架，原本有幾架？`;
+  cand=[Math.abs(a-b),c+10,c-10,c+1,c-1]}
+ else if(t===5){a=R(40,90);b=R(11,30);d=R(11,30);c=a-b+d;
+  q=`${n}隊長有${a}枚飛彈，發射了${b}枚，基地又補給${d}枚，現在有幾枚？`;
+  cand=[a-b-d,a+b+d,c+10,c-10,a-b]}
+ else if(t===6){a=R(20,60);b=R(11,30);d=R(11,Math.min(a+b-5,40));c=a+b-d;
+  q=`空中有${a}架友軍，${b}架來支援，後來${d}架返航，現在空中有幾架友軍？`;
+  cand=[a+b+d,a+b,c+10,c-10,Math.abs(a-b)]}
+ else{a=R(11,30);b=R(11,30);d=R(5,Math.min(30,99-a-b));c=a+b+d;
+  q=`${n}隊長三個回合分別擊落${a}架、${b}架、${d}架敵機，一共擊落幾架？`;
+  cand=[a+b,c+10,c-10,c+1,c-1]}
+ const ds=shuffle([...new Set(cand)].filter(x=>x>0&&x!==c)).slice(0,2);
+ return{q,c,o:shuffle([c,...ds])};
+}
+function genQOld(n){
+ let q,c,cand;
+ if(Math.random()<.5){
+  const a=R(12,79),b=R(11,Math.min(60,99-a));c=a+b;
+  q=[`${n}隊長的戰機有${a}枚飛彈，基地又補給${b}枚，現在共有幾枚飛彈？`,
+     `${n}隊長第一回合擊落${a}架敵機，第二回合又擊落${b}架，一共擊落幾架？`,
+     `天空中有${a}架友軍戰機和${b}架敵機在纏鬥，空中共有幾架戰機？`][R(0,2)];
+  cand=[c+10,c-10,c+1,c-1,Math.abs(a-b)];
+ }else{
+  const a=R(30,99),b=R(11,a-5);c=a-b;
+  q=[`敵方機群有${a}架戰機，被${n}隊長擊落${b}架，還剩幾架？`,
+     `${n}隊長的戰機有${a}格油量，空戰用掉${b}格，還剩幾格？`,
+     `${n}隊長帶著${a}發機砲子彈出擊，射出${b}發後還剩幾發？`][R(0,2)];
+  cand=[c+10,c-10,a+b,c+1,c-1];
+ }
+ const ds=shuffle([...new Set(cand)].filter(x=>x>0&&x!==c)).slice(0,2);
+ return{q,c,o:shuffle([c,...ds])};
+}
+// ---- 遊戲狀態 ----
+let st='menu',pilot='',score=0,en,msl,parts=[],clouds=[],cur,fr=0,crashWhy='';
+for(let i=0;i<8;i++)clouds.push({x:R(0,W),y:R(20,380),s:R(1,3),w:R(50,110)});
+function newEnemy(){en={x:W+60,y:R(90,230),hit:false};st='approach'}
+function go(){initA();const n=$('nm').value.trim().slice(0,8);if(!n){$('nm').placeholder='請先輸入名字喔！';$('nm').focus();return}try{localStorage.setItem('ace_last',n)}catch(e){}start(n)}
+function start(n){initA();sClick();pilot=n;score=0;ban=null;parts=[];msl=null;$('pilot').style.display='none';$('crash').style.display='none';newEnemy()}
+function showPilot(){initA();sClick();showHS();st='menu';$('crash').style.display='none';$('quiz').style.display='none';$('pilot').style.display='flex'}
+function ask(){st='quiz';cur=genQ(pilot);sAlert();$('qt').textContent=cur.q;const box=$('opts');box.innerHTML='';
+ cur.o.forEach(v=>{const b=document.createElement('button');b.className='bo';b.textContent=v;b.onclick=()=>answer(v);box.appendChild(b)});
+ $('quiz').style.display='flex'}
+function answer(v){sClick();$('quiz').style.display='none';
+ if(v===cur.c){st='shot';msl={x:130,y:H/2,t:'p'};sShoot()}
+ else{st='enemyfire';crashWhy=`${pilot}隊長選了 ${v}，正確答案是 ${cur.c}`;msl={x:en.x,y:en.y,t:'e'};sShoot()}}
+function explode(x,y,col){for(let i=0;i<40;i++)parts.push({x,y,vx:(Math.random()-.5)*10,vy:(Math.random()-.5)*10,l:R(20,45),c:col[R(0,col.length-1)]})}
+function endGame(){
+ if(score>(hs[pilot]||0)){hs[pilot]=score;saveHS()}pushOnline(pilot,score);
+ $('cr').textContent=crashWhy;$('fs').textContent=`本次擊落 ${score} 架敵機`;$('hh').textContent=`🏆 ${pilot}隊長最高紀錄：${hs[pilot]||0} 架`;
+ $('crash').style.display='flex';st='over'}
+// ---- 繪圖 ----
+const PL=[['MiG-15','#b8c4d0',8,22,10,-20,32,0,0,1],['F-104','#d0d7de',4,4,10,-6,16,0,0,1],['F-4','#8fa3b8',10,24,14,-24,30,0,0,1.05],['F-14','#9fb3c8',14,26,14,-26,36,1,0,1.1],['F-15','#aab8c2',8,20,14,-22,34,1,0,1.1],['F-16','#cfd8dc',2,14,10,-24,28,0,0,1],['Su-27','#9ec1e0',10,26,16,-28,34,1,0,1.15],['F/A-18E','#7f9cb5',6,18,12,-22,32,1,0,1.1],['Su-35','#e0c36b',10,26,16,-28,34,1,1,1.15],['F-22','#a3b1c6',14,24,12,-26,32,1,0,1.2],['Su-57','#d4a5ff',14,24,12,-26,34,1,1,1.2],['F-35','#ced4da',8,20,12,-22,34,0,0,1.2]];
+let ban=null;const lv=()=>Math.min(11,Math.floor(score/3));
+const sUp=()=>{[523,659,784,1047,1319].forEach((f,i)=>tone(f,f,.15,'square',.18,i*.1))};
+function jet(x,y,col,dir,tilt,p){p=p||PL[0];const a=p[2],sw=p[3],tc=p[4],b=p[5],sp=p[6],tw=p[7],cn=p[8],sc=p[9];
+ ctx.save();ctx.translate(x,y);ctx.rotate(tilt||0);ctx.scale(dir*sc,sc);ctx.fillStyle=col;
+ ctx.beginPath();ctx.moveTo(52,0);ctx.lineTo(20,-7);ctx.lineTo(-38,-7);ctx.lineTo(-46,-4);ctx.lineTo(-46,4);ctx.lineTo(-38,7);ctx.lineTo(20,7);ctx.closePath();ctx.fill();
+ [-1,1].forEach(s=>{
+  ctx.beginPath();ctx.moveTo(a,s*6);ctx.lineTo(a-sw,s*sp);ctx.lineTo(a-sw-tc,s*sp);ctx.lineTo(b,s*6);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(-30,s*6);ctx.lineTo(-40,s*17);ctx.lineTo(-48,s*17);ctx.lineTo(-44,s*6);ctx.closePath();ctx.fill();
+  if(tw)ctx.fillRect(-44,s*9-2,18,4);
+  if(cn){ctx.beginPath();ctx.moveTo(28,s*5);ctx.lineTo(20,s*16);ctx.lineTo(14,s*16);ctx.lineTo(16,s*5);ctx.closePath();ctx.fill()}
+ });
+ ctx.fillStyle='#8ecae6';ctx.beginPath();ctx.ellipse(22,0,12,4,0,0,7);ctx.fill();
+ ctx.fillStyle='#ff9f1c';ctx.beginPath();ctx.moveTo(-46,-3);ctx.lineTo(-62-R(0,10),0);ctx.lineTo(-46,3);ctx.fill();ctx.restore()}
+function jetOld(x,y,col,dir,tilt){ctx.save();ctx.translate(x,y);ctx.rotate(tilt||0);ctx.scale(dir,1);
+ ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(48,0);ctx.lineTo(10,-8);ctx.lineTo(-30,-8);ctx.lineTo(-40,-22);ctx.lineTo(-48,-22);ctx.lineTo(-42,-4);ctx.lineTo(-48,0);ctx.lineTo(-42,4);ctx.lineTo(-48,22);ctx.lineTo(-40,22);ctx.lineTo(-30,8);ctx.lineTo(10,8);ctx.closePath();ctx.fill();
+ ctx.beginPath();ctx.moveTo(10,-6);ctx.lineTo(-18,-34);ctx.lineTo(-26,-34);ctx.lineTo(-14,-6);ctx.closePath();ctx.fill();
+ ctx.beginPath();ctx.moveTo(10,6);ctx.lineTo(-18,34);ctx.lineTo(-26,34);ctx.lineTo(-14,6);ctx.closePath();ctx.fill();
+ ctx.fillStyle='#8ecae6';ctx.beginPath();ctx.ellipse(16,-3,12,5,0,0,7);ctx.fill();
+ ctx.fillStyle='#ff9f1c';ctx.beginPath();ctx.moveTo(-48,-3);ctx.lineTo(-62-R(0,10),0);ctx.lineTo(-48,3);ctx.fill();ctx.restore()}
+function draw(){
+ const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#1d4e89');g.addColorStop(1,'#8ecae6');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ ctx.fillStyle='rgba(255,255,255,.75)';
+ clouds.forEach(c=>{c.x-=c.s*(st==='quiz'?.2:1);if(c.x<-120){c.x=W+60;c.y=R(20,380)}ctx.beginPath();ctx.ellipse(c.x,c.y,c.w,c.w/4,0,0,7);ctx.fill()});
+ if(st==='menu'){return}
+ const py=H/2+Math.sin(fr/20)*8;
+ if(st!=='over'&&!(st==='enemyfire'&&msl&&msl.dead))jet(100,py,PL[lv()][1],1,Math.sin(fr/25)*.04,PL[lv()]);
+ if(en&&!en.hit)jet(en.x,en.y,'#d62839',-1,0,PL[Math.min(11,lv()+1)]);
+ if(msl&&!msl.dead){ctx.fillStyle='#ffd60a';ctx.fillRect(msl.x-12,msl.y-3,24,6);ctx.fillStyle='#fb8500';ctx.fillRect(msl.x-22*(msl.t==='p'?1:-1),msl.y-2,10,4)}
+ parts=parts.filter(p=>p.l>0);parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.l--;ctx.fillStyle=p.c;ctx.globalAlpha=Math.min(1,p.l/20);ctx.beginPath();ctx.arc(p.x,p.y,4,0,7);ctx.fill();ctx.globalAlpha=1});
+ ctx.fillStyle='rgba(0,0,0,.45)';ctx.font='bold 18px sans-serif';const L='🎯 '+score+' 架  ✈ '+PL[lv()][0],RR='      '+pilot+' 隊長',lw=ctx.measureText(L).width+20,rw=ctx.measureText(RR).width+20;ctx.fillRect(8,8,lw,34);ctx.fillRect(W-rw-8,8,rw,34);
+ ctx.fillStyle='#fff';ctx.fillText(L,18,31);if(ban&&ban.t>0){ban.t--;ctx.globalAlpha=Math.min(1,ban.t/30);ctx.fillStyle='#ffd60a';ctx.font='bold 34px sans-serif';ctx.textAlign='center';ctx.fillText(ban.x,W/2,90);ctx.textAlign='left';ctx.globalAlpha=1}ctx.fillStyle='#fff';ctx.font='bold 18px sans-serif';ctx.fillText('👩‍✈️ '+pilot+' 隊長',W-rw+2,31);
+}
+function update(){
+ fr++;
+ if(st==='approach'){en.x-=5;if(en.x<=470){sAlert();ask()}}
+ else if(st==='shot'&&msl){msl.x+=16;msl.y+=(en.y-msl.y)*.15;if(msl.x>=en.x-30){msl.dead=true;en.hit=true;explode(en.x,en.y,['#ffd60a','#fb8500','#ff4d7d','#fff']);sBoom();sOk();score++;if(score%3===0&&score<=33){ban={t:100,x:'⬆ 升級！ '+PL[lv()][0]};sUp()}st='boom';fr=0}}
+ else if(st==='boom'&&fr>40){msl=null;newEnemy()}
+ else if(st==='enemyfire'&&msl){msl.x-=14;msl.y+=(H/2-msl.y)*.1;if(msl.x<=130){msl.dead=true;explode(100,H/2,['#ffd60a','#fb8500','#ff4d7d','#999']);sBoom();sCrash();st='crashing';fr=0}}
+ else if(st==='crashing'&&fr>50)endGame();
+}
+function loop(){update();draw();requestAnimationFrame(loop)}
+try{$('nm').value=localStorage.getItem('ace_last')||''}catch(e){}
+showHS();loop();
+</script>
+</body>
+</html>
